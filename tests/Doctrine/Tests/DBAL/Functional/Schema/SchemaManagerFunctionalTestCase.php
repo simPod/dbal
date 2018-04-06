@@ -12,6 +12,7 @@ use Doctrine\DBAL\Schema\Sequence;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Schema\TableDiff;
 use Doctrine\DBAL\Types\Type;
+use function strtolower;
 
 class SchemaManagerFunctionalTestCase extends \Doctrine\Tests\DbalFunctionalTestCase
 {
@@ -90,7 +91,7 @@ class SchemaManagerFunctionalTestCase extends \Doctrine\Tests\DbalFunctionalTest
 
         $name = 'dropcreate_sequences_test_seq';
 
-        $this->_sm->dropAndCreateSequence(new \Doctrine\DBAL\Schema\Sequence($name, 20, 10));
+        $this->_sm->dropAndCreateSequence(new Sequence($name, 20, 10));
 
         self::assertTrue($this->hasElementWithName($this->_sm->listSequences(), $name));
     }
@@ -107,13 +108,13 @@ class SchemaManagerFunctionalTestCase extends \Doctrine\Tests\DbalFunctionalTest
         return count($filteredList) === 1;
     }
 
-    public function testListSequences()
+    public function testListSequences() : void
     {
-        if(!$this->_conn->getDatabasePlatform()->supportsSequences()) {
-            $this->markTestSkipped($this->_conn->getDriver()->getName().' does not support sequences.');
+        if (! $this->_conn->getDatabasePlatform()->supportsSequences()) {
+            $this->markTestSkipped($this->_conn->getDriver()->getName() . ' does not support sequences.');
         }
 
-        $sequence = new \Doctrine\DBAL\Schema\Sequence('list_sequences_test_seq', 20, 10);
+        $sequence = new Sequence('list_sequences_test_seq', 20, 10);
         $this->_sm->createSequence($sequence);
 
         $sequences = $this->_sm->listSequences();
@@ -121,16 +122,18 @@ class SchemaManagerFunctionalTestCase extends \Doctrine\Tests\DbalFunctionalTest
         self::assertInternalType('array', $sequences, 'listSequences() should return an array.');
 
         $foundSequence = null;
-        foreach($sequences as $sequence) {
-            self::assertInstanceOf('Doctrine\DBAL\Schema\Sequence', $sequence, 'Array elements of listSequences() should be Sequence instances.');
-            if(strtolower($sequence->getName()) == 'list_sequences_test_seq') {
-                $foundSequence = $sequence;
+        foreach ($sequences as $sequence) {
+            self::assertInstanceOf(Sequence::class, $sequence, 'Array elements of listSequences() should be Sequence instances.');
+            if (strtolower($sequence->getName()) !== 'list_sequences_test_seq') {
+                continue;
             }
+
+            $foundSequence = $sequence;
         }
 
         self::assertNotNull($foundSequence, "Sequence with name 'list_sequences_test_seq' was not found.");
-        self::assertEquals(20, $foundSequence->getAllocationSize(), "Allocation Size is expected to be 20.");
-        self::assertEquals(10, $foundSequence->getInitialValue(), "Initial Value is expected to be 10.");
+        self::assertSame(20, $foundSequence->getAllocationSize(), 'Allocation Size is expected to be 20.');
+        self::assertSame(10, $foundSequence->getInitialValue(), 'Initial Value is expected to be 10.');
     }
 
     public function testListDatabases()
