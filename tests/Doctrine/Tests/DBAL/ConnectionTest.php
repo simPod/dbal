@@ -324,6 +324,14 @@ class ConnectionTest extends \Doctrine\Tests\DbalTestCase
         self::assertFalse($conn->isTransactionActive());
     }
 
+    public function testEmptyInsert() : void
+    {
+        $conn = $this->_conn;
+        $conn->connect();
+
+        self::assertSame(0, $conn->insert('footable', []));
+    }
+
     /**
      * @group DBAL-2511
      */
