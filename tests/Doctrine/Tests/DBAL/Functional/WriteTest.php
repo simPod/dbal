@@ -119,6 +119,11 @@ class WriteTest extends \Doctrine\Tests\DbalFunctionalTestCase
         $this->insertRows();
     }
 
+    public function testEmptyInsert() : void
+    {
+        self::assertEquals(0, $this->_conn->insert('write_table', []));
+    }
+
     public function testDelete()
     {
         $this->insertRows();
