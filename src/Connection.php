@@ -1202,14 +1202,15 @@ class Connection
         $this->beginTransaction();
         try {
             $res = $func($this);
-            $this->commit();
-
-            return $res;
         } catch (Throwable $e) {
             $this->rollBack();
 
             throw $e;
         }
+
+        $this->commit();
+
+        return $res;
     }
 
     /**
@@ -1320,7 +1321,13 @@ class Connection
                 $logger->startQuery('"COMMIT"');
             }
 
-            $result = $connection->commit();
+            try {
+                $result = $connection->commit();
+            } catch (Driver\Exception $e) {
+                $this->updateTransactionStateAfterCommit();
+
+                throw $this->convertExceptionDuringQuery($e, 'COMMIT');
+            }
 
             if ($logger !== null) {
                 $logger->stopQuery();
@@ -1336,17 +1343,22 @@ class Connection
             }
         }
 
+        $this->updateTransactionStateAfterCommit();
+
+        return $result;
+    }
+
+    private function updateTransactionStateAfterCommit(): void
+    {
         --$this->transactionNestingLevel;
 
         $this->getEventManager()->dispatchEvent(Events::onTransactionCommit, new TransactionCommitEventArgs($this));
 
         if ($this->autoCommit !== false || $this->transactionNestingLevel !== 0) {
-            return $result;
+            return;
         }
 
         $this->beginTransaction();
-
-        return $result;
     }
 
     /**
