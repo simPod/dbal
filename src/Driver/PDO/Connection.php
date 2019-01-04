@@ -112,7 +112,11 @@ final class Connection implements ServerInfoAwareConnection
 
     public function commit(): bool
     {
-        return $this->connection->commit();
+        try {
+            return $this->connection->commit();
+        } catch (PDOException $exception) {
+            throw Exception::new($exception);
+        }
     }
 
     public function rollBack(): bool
