@@ -1269,14 +1269,15 @@ class Connection
         $this->beginTransaction();
         try {
             $res = $func($this);
-            $this->commit();
-
-            return $res;
         } catch (Throwable $e) {
             $this->rollBack();
 
             throw $e;
         }
+
+        $this->commit();
+
+        return $res;
     }
 
     /**
@@ -1412,12 +1413,47 @@ class Connection
 
         $connection = $this->getWrappedConnection();
 
-        if ($this->transactionNestingLevel === 1) {
-            $result = $this->doCommit($connection);
-        } elseif ($this->nestTransactionsWithSavepoints) {
-            $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+        try {
+            if ($this->transactionNestingLevel === 1) {
+                $result = $this->doCommit($connection);
+            } elseif ($this->nestTransactionsWithSavepoints) {
+                $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+            }
+        } finally {
+            $this->updateTransactionStateAfterCommit();
         }
 
+        return $result;
+    }
+
+    /**
+     * @return bool
+     *
+     * @throws DriverException
+     */
+    private function doCommit(DriverConnection $connection)
+    {
+        $logger = $this->_config->getSQLLogger();
+
+        if ($logger !== null) {
+            $logger->startQuery('"COMMIT"');
+        }
+
+        try {
+            $result = $connection->commit();
+        } catch (Driver\Exception $e) {
+            throw $this->convertExceptionDuringQuery($e, 'COMMIT');
+        }
+
+        if ($logger !== null) {
+            $logger->stopQuery();
+        }
+
+        return $result;
+    }
+
+    private function updateTransactionStateAfterCommit(): void
+    {
         --$this->transactionNestingLevel;
 
         $eventManager = $this->getEventManager();
@@ -1434,56 +1470,10 @@ class Connection
         }
 
         if ($this->autoCommit !== false || $this->transactionNestingLevel !== 0) {
-            return $result;
+            return;
         }
 
         $this->beginTransaction();
-
-        return $result;
-    }
-
-    /**
-     * @return bool
-     *
-     * @throws DriverException
-     */
-    private function doCommit(DriverConnection $connection)
-    {
-        $logger = $this->_config->getSQLLogger();
-
-        if ($logger !== null) {
-            $logger->startQuery('"COMMIT"');
-        }
-
-        $result = $connection->commit();
-
-        if ($logger !== null) {
-            $logger->stopQuery();
-        }
-
-        return $result;
-    }
-
-    /**
-     * @return bool
-     *
-     * @throws DriverException
-     */
-    private function doCommit(DriverConnection $connection)
-    {
-        $logger = $this->_config->getSQLLogger();
-
-        if ($logger !== null) {
-            $logger->startQuery('"COMMIT"');
-        }
-
-            $result = $connection->commit();
-
-        if ($logger !== null) {
-            $logger->stopQuery();
-        }
-
-        return $result;
     }
 
     /**
