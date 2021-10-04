@@ -6,7 +6,9 @@ namespace Doctrine\DBAL\Tests\Functional;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
-use Doctrine\DBAL\Schema\Constraint;
+use Doctrine\DBAL\Platforms\OraclePlatform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SqlitePlatform;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Schema\UniqueConstraint;
 use Doctrine\DBAL\Tests\FunctionalTestCase;
@@ -23,11 +25,11 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
     {
         parent::setUp();
 
-        $platformName = $this->connection->getDatabasePlatform()->getName();
+        $platform = $this->connection->getDatabasePlatform();
 
-        if ($platformName === 'oracle') {
+        if ($platform instanceof OraclePlatform) {
             $constraintName = 'C1_UNIQUE';
-        } elseif ($platformName === 'postgresql') {
+        } elseif ($platform instanceof PostgreSQLPlatform) {
             $constraintName = 'c1_unique';
         } else {
             $constraintName = 'c1_unique';
@@ -41,19 +43,19 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
         $table->addColumn('unique_field', 'integer', ['notnull' => true]);
         $schemaManager->createTable($table);
 
-        if ($platformName === 'oracle') {
+        if ($platform instanceof OraclePlatform) {
             $createConstraint = sprintf(
                 'ALTER TABLE deferrable_constraints ' .
                 'ADD CONSTRAINT %s UNIQUE (unique_field) DEFERRABLE INITIALLY IMMEDIATE',
                 $constraintName
             );
-        } elseif ($platformName === 'postgresql') {
+        } elseif ($platform instanceof PostgreSQLPlatform) {
             $createConstraint = sprintf(
                 'ALTER TABLE deferrable_constraints ' .
                 'ADD CONSTRAINT %s UNIQUE (unique_field) DEFERRABLE INITIALLY IMMEDIATE',
                 $constraintName
             );
-        } elseif ($platformName === 'sqlite') {
+        } elseif ($platform instanceof SqlitePlatform) {
             $createConstraint = sprintf(
                 'CREATE UNIQUE INDEX %s ON deferrable_constraints(unique_field)',
                 $constraintName
@@ -193,16 +195,9 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
 
     private function supportsDeferrableConstraints(): bool
     {
-        $platformName = $this->connection->getDatabasePlatform()->getName();
+        $platform = $this->connection->getDatabasePlatform();
 
-        switch ($platformName) {
-            case 'oracle':
-            case 'postgresql':
-                return true;
-
-            default:
-                return false;
-        }
+        return $platform instanceof OraclePlatform || $platform instanceof PostgreSQLPlatform;
     }
 
     private function skipIfDeferrableIsNotSupported(): void
