@@ -96,6 +96,10 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
 
     public function testTransactionalWithDeferredConstraintAndTransactionNesting(): void
     {
+        if (! $this->connection->getDatabasePlatform()->supportsSavepoints()) {
+            self::markTestSkipped('This test requires the platform to support savepoints.');
+        }
+
         $this->skipIfDeferrableIsNotSupported();
 
         $this->connection->setNestTransactionsWithSavepoints(true);
@@ -112,6 +116,10 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
 
     public function testTransactionalWithNonDeferredConstraintAndTransactionNesting(): void
     {
+        if (! $this->connection->getDatabasePlatform()->supportsSavepoints()) {
+            self::markTestSkipped('This test requires the platform to support savepoints.');
+        }
+
         $this->connection->setNestTransactionsWithSavepoints(true);
 
         $this->connection->transactional(function (Connection $connection): void {
@@ -158,6 +166,10 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
 
     public function testCommitWithDeferredConstraintAndTransactionNesting(): void
     {
+        if (! $this->connection->getDatabasePlatform()->supportsSavepoints()) {
+            self::markTestSkipped('This test requires the platform to support savepoints.');
+        }
+
         $this->skipIfDeferrableIsNotSupported();
 
         $this->connection->setNestTransactionsWithSavepoints(true);
@@ -175,6 +187,10 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
 
     public function testCommitWithNonDeferredConstraintAndTransactionNesting(): void
     {
+        if (! $this->connection->getDatabasePlatform()->supportsSavepoints()) {
+            self::markTestSkipped('This test requires the platform to support savepoints.');
+        }
+
         $this->skipIfDeferrableIsNotSupported();
 
         $this->connection->setNestTransactionsWithSavepoints(true);
