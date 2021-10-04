@@ -3,13 +3,6 @@ name: "Continuous Integration"
 
 on:
   pull_request:
-    branches:
-      - "*.x"
-  push:
-    branches:
-      - "*.x"
-  schedule:
-    - cron: "42 3 * * *"
 
 env:
   fail-fast: true
