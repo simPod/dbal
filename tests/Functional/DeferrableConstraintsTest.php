@@ -9,6 +9,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Platforms\OraclePlatform;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\SqlitePlatform;
+use Doctrine\DBAL\Platforms\SQLServerPlatform;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Schema\UniqueConstraint;
 use Doctrine\DBAL\Tests\FunctionalTestCase;
@@ -82,14 +83,14 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
 
             $connection->executeStatement('INSERT INTO deferrable_constraints VALUES (1)');
 
-            $this->expectException(UniqueConstraintViolationException::class);
+            $this->expectUniqueConstraintViolation();
         });
     }
 
     public function testTransactionalWithNonDeferredConstraint(): void
     {
         $this->connection->transactional(function (Connection $connection): void {
-            $this->expectException(UniqueConstraintViolationException::class);
+            $this->expectUniqueConstraintViolation();
             $connection->executeStatement('INSERT INTO deferrable_constraints VALUES (1)');
         });
     }
@@ -110,7 +111,7 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
             $connection->executeStatement('INSERT INTO deferrable_constraints VALUES (1)');
             $connection->commit();
 
-            $this->expectException(UniqueConstraintViolationException::class);
+            $this->expectUniqueConstraintViolation();
         });
     }
 
@@ -130,7 +131,7 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
             } catch (Throwable $t) {
                 $this->connection->rollBack();
 
-                $this->expectException(UniqueConstraintViolationException::class);
+                $this->expectUniqueConstraintViolation();
 
                 throw $t;
             }
@@ -145,7 +146,7 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
         $this->connection->executeStatement(sprintf('SET CONSTRAINTS "%s" DEFERRED', $this->constraintName));
         $this->connection->executeStatement('INSERT INTO deferrable_constraints VALUES (1)');
 
-        $this->expectException(UniqueConstraintViolationException::class);
+        $this->expectUniqueConstraintViolation();
         $this->connection->commit();
     }
 
@@ -158,7 +159,7 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
         } catch (Throwable $t) {
             $this->connection->rollBack();
 
-            $this->expectException(UniqueConstraintViolationException::class);
+            $this->expectUniqueConstraintViolation();
 
             throw $t;
         }
@@ -180,7 +181,7 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
         $this->connection->executeStatement('INSERT INTO deferrable_constraints VALUES (1)');
         $this->connection->commit();
 
-        $this->expectException(UniqueConstraintViolationException::class);
+        $this->expectUniqueConstraintViolation();
 
         $this->connection->commit();
     }
@@ -203,7 +204,7 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
         } catch (Throwable $t) {
             $this->connection->rollBack();
 
-            $this->expectException(UniqueConstraintViolationException::class);
+            $this->expectUniqueConstraintViolation();
 
             throw $t;
         }
@@ -223,6 +224,17 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
         }
 
         self::markTestSkipped('Only databases supporting deferrable constraints are eligible for this test.');
+    }
+
+    private function expectUniqueConstraintViolation(): void
+    {
+        if ($this->connection->getDatabasePlatform() instanceof SQLServerPlatform) {
+            $this->expectExceptionMessage(sprintf("Violation of UNIQUE KEY constraint '%s'", $this->constraintName));
+
+            return;
+        }
+
+        $this->expectException(UniqueConstraintViolationException::class);
     }
 
     protected function tearDown(): void
