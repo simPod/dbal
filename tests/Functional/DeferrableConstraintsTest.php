@@ -6,6 +6,7 @@ namespace Doctrine\DBAL\Tests\Functional;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Platforms\DB2Platform;
 use Doctrine\DBAL\Platforms\OraclePlatform;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\SqlitePlatform;
@@ -230,6 +231,13 @@ final class DeferrableConstraintsTest extends FunctionalTestCase
     {
         if ($this->connection->getDatabasePlatform() instanceof SQLServerPlatform) {
             $this->expectExceptionMessage(sprintf("Violation of UNIQUE KEY constraint '%s'", $this->constraintName));
+
+            return;
+        }
+
+        if ($this->connection->getDatabasePlatform() instanceof DB2Platform) {
+            // No concrete message is provided
+            $this->expectException(DriverException::class);
 
             return;
         }
