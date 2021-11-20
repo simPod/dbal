@@ -68,10 +68,13 @@ TEXT);
 
         $exception = Exception::new($pdoException);
 
-        self::assertSame(1, $exception->getCode());
-        self::assertStringContainsString(
-            'unique constraint (DOCTRINE.C1_UNIQUE) violated',
-            $exception->getMessage(),
+        self::assertSame(2091, $exception->getCode());
+        self::assertStringContainsString('transaction rolled back', $exception->getMessage());
+
+        $previous = $exception->getPrevious();
+        self::assertNotNull($previous);
+        self::assertSame(1, $previous->getCode());
+        self::assertStringContainsString('unique constraint (DOCTRINE.C1_UNIQUE) violated', $previous->getMessage(),
         );
     }
 }

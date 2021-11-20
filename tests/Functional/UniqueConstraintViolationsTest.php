@@ -79,20 +79,25 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
     {
         $this->skipIfDeferrableIsNotSupported();
 
-        $this->connection->transactional(function (Connection $connection): void {
-            $connection->executeStatement(sprintf('SET CONSTRAINTS "%s" DEFERRED', $this->constraintName));
+        try {
+            $this->connection->transactional(function (Connection $connection): void {
+                $connection->executeStatement(sprintf('SET CONSTRAINTS "%s" DEFERRED', $this->constraintName));
 
-            $connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
-
-            $this->expectUniqueConstraintViolation();
-        });
+                $connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
+            });
+        } catch (Throwable $throwable) {
+            $this->expectUniqueConstraintViolation($throwable);
+        }
     }
 
     public function testTransactionalViolatesConstraint(): void
     {
         $this->connection->transactional(function (Connection $connection): void {
-            $this->expectUniqueConstraintViolation();
-            $connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
+            try {
+                $connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
+            } catch (Throwable $throwable) {
+                $this->expectUniqueConstraintViolation($throwable);
+            }
         });
     }
 
@@ -106,14 +111,16 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
 
         $this->connection->setNestTransactionsWithSavepoints(true);
 
-        $this->connection->transactional(function (Connection $connection): void {
-            $connection->executeStatement(sprintf('SET CONSTRAINTS "%s" DEFERRED', $this->constraintName));
-            $connection->beginTransaction();
-            $connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
-            $connection->commit();
-
-            $this->expectUniqueConstraintViolation();
-        });
+        try {
+            $this->connection->transactional(function (Connection $connection): void {
+                $connection->executeStatement(sprintf('SET CONSTRAINTS "%s" DEFERRED', $this->constraintName));
+                $connection->beginTransaction();
+                $connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
+                $connection->commit();
+            });
+        } catch (Throwable $throwable) {
+            $this->expectUniqueConstraintViolation($throwable);
+        }
     }
 
     public function testTransactionalViolatesConstraintWhileUsingTransactionNesting(): void
@@ -129,12 +136,10 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
 
             try {
                 $this->connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
-            } catch (Throwable $t) {
+            } catch (Throwable $throwable) {
                 $this->connection->rollBack();
 
-                $this->expectUniqueConstraintViolation();
-
-                throw $t;
+                $this->expectUniqueConstraintViolation($throwable);
             }
         });
     }
@@ -147,8 +152,11 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
         $this->connection->executeStatement(sprintf('SET CONSTRAINTS "%s" DEFERRED', $this->constraintName));
         $this->connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
 
-        $this->expectUniqueConstraintViolation();
-        $this->connection->commit();
+        try {
+            $this->connection->commit();
+        } catch (Throwable $throwable) {
+            $this->expectUniqueConstraintViolation($throwable);
+        }
     }
 
     public function testInsertViolatesConstraint(): void
@@ -160,9 +168,7 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
         } catch (Throwable $t) {
             $this->connection->rollBack();
 
-            $this->expectUniqueConstraintViolation();
-
-            throw $t;
+            $this->expectUniqueConstraintViolation($t);
         }
     }
 
@@ -182,9 +188,11 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
         $this->connection->executeStatement('INSERT INTO unique_constraint_violations VALUES (1)');
         $this->connection->commit();
 
-        $this->expectUniqueConstraintViolation();
-
-        $this->connection->commit();
+        try {
+                $this->connection->commit();
+        } catch (Throwable $throwable) {
+            $this->expectUniqueConstraintViolation($throwable);
+        }
     }
 
     public function testCommitViolatesConstraintWhileUsingTransactionNesting(): void
@@ -205,9 +213,7 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
         } catch (Throwable $t) {
             $this->connection->rollBack();
 
-            $this->expectUniqueConstraintViolation();
-
-            throw $t;
+            $this->expectUniqueConstraintViolation($t);
         }
     }
 
@@ -227,22 +233,34 @@ final class UniqueConstraintViolationsTest extends FunctionalTestCase
         self::markTestSkipped('Only databases supporting deferrable constraints are eligible for this test.');
     }
 
-    private function expectUniqueConstraintViolation(): void
+    private function expectUniqueConstraintViolation(Throwable $throwable): void
     {
         if ($this->connection->getDatabasePlatform() instanceof SQLServerPlatform) {
-            $this->expectExceptionMessage(sprintf("Violation of UNIQUE KEY constraint '%s'", $this->constraintName));
+            self::assertStringContainsString(
+                sprintf("Violation of UNIQUE KEY constraint '%s'", $this->constraintName),
+                $throwable->getMessage()
+            );
 
             return;
         }
 
         if ($this->connection->getDatabasePlatform() instanceof DB2Platform) {
             // No concrete message is provided
-            $this->expectException(DriverException::class);
+            self::assertInstanceOf(DriverException::class, $throwable);
 
             return;
         }
 
-        $this->expectException(UniqueConstraintViolationException::class);
+        if ($this->connection->getDatabasePlatform() instanceof OraclePlatform) {
+            self::assertInstanceOf(DriverException::class, $throwable);
+            $previous = $throwable->getPrevious();
+            $this->assertNotNull($previous);
+            self::assertInstanceOf(UniqueConstraintViolationException::class, $previous);
+
+            return;
+        }
+
+        self::assertInstanceOf(UniqueConstraintViolationException::class, $throwable);
     }
 
     protected function tearDown(): void
