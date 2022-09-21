@@ -1337,13 +1337,15 @@ class Connection
 
         $connection = $this->getWrappedConnection();
 
-        if ($this->transactionNestingLevel === 1) {
-            $result = $this->doCommit($connection);
-        } elseif ($this->nestTransactionsWithSavepoints) {
-            $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+        try {
+            if ($this->transactionNestingLevel === 1) {
+                $result = $this->doCommit($connection);
+            } elseif ($this->nestTransactionsWithSavepoints) {
+                $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+            }
+        } finally {
+            $this->updateTransactionStateAfterCommit();
         }
-
-        $this->updateTransactionStateAfterCommit();
 
         return $result;
     }
@@ -1360,8 +1362,6 @@ class Connection
         try {
             $result = $connection->commit();
         } catch (Driver\Exception $e) {
-            $this->updateTransactionStateAfterCommit();
-
             throw $this->convertExceptionDuringQuery($e, 'COMMIT');
         }
 
