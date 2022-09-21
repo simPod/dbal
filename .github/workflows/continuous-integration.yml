@@ -3,8 +3,6 @@ name: "Continuous Integration"
 
 on:
   pull_request:
-    branches:
-      - "*.x"
     paths:
       - .github/workflows/continuous-integration.yml
       - ci/**
