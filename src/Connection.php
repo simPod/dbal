@@ -1337,36 +1337,37 @@ class Connection
 
         $connection = $this->getWrappedConnection();
 
-        $logger = $this->_config->getSQLLogger();
-
         if ($this->transactionNestingLevel === 1) {
-            if ($logger !== null) {
-                $logger->startQuery('"COMMIT"');
-            }
-
-            try {
-                $result = $connection->commit();
-            } catch (Driver\Exception $e) {
-                $this->updateTransactionStateAfterCommit();
-
-                throw $this->convertExceptionDuringQuery($e, 'COMMIT');
-            }
-
-            if ($logger !== null) {
-                $logger->stopQuery();
-            }
+            $result = $this->doCommit($connection);
         } elseif ($this->nestTransactionsWithSavepoints) {
-            if ($logger !== null) {
-                $logger->startQuery('"RELEASE SAVEPOINT"');
-            }
-
             $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
-            if ($logger !== null) {
-                $logger->stopQuery();
-            }
         }
 
         $this->updateTransactionStateAfterCommit();
+
+        return $result;
+    }
+
+    /** @throws DriverException */
+    private function doCommit(?DriverConnection $connection): bool
+    {
+        $logger = $this->_config->getSQLLogger();
+
+        if ($logger !== null) {
+            $logger->startQuery('"COMMIT"');
+        }
+
+        try {
+            $result = $connection->commit();
+        } catch (Driver\Exception $e) {
+            $this->updateTransactionStateAfterCommit();
+
+            throw $this->convertExceptionDuringQuery($e, 'COMMIT');
+        }
+
+        if ($logger !== null) {
+            $logger->stopQuery();
+        }
 
         return $result;
     }
@@ -1487,6 +1488,12 @@ class Connection
      */
     public function releaseSavepoint($savepoint)
     {
+        $logger = $this->_config->getSQLLogger();
+
+        if ($logger !== null) {
+            $logger->startQuery('"RELEASE SAVEPOINT"');
+        }
+
         $platform = $this->getDatabasePlatform();
 
         if (! $platform->supportsSavepoints()) {
@@ -1494,10 +1501,20 @@ class Connection
         }
 
         if (! $platform->supportsReleaseSavepoints()) {
+            if ($logger !== null) {
+                $logger->stopQuery();
+            }
+
             return;
         }
 
         $this->executeStatement($platform->releaseSavePoint($savepoint));
+
+        if ($logger === null) {
+            return;
+        }
+
+        $logger->stopQuery();
     }
 
     /**
