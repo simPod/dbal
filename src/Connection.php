@@ -1465,6 +1465,28 @@ class Connection
     }
 
     /**
+     * @return bool
+     *
+     * @throws DriverException
+     */
+    private function doCommit(DriverConnection $connection)
+    {
+        $logger = $this->_config->getSQLLogger();
+
+        if ($logger !== null) {
+            $logger->startQuery('"COMMIT"');
+        }
+
+            $result = $connection->commit();
+
+        if ($logger !== null) {
+            $logger->stopQuery();
+        }
+
+        return $result;
+    }
+
+    /**
      * Commits all current nesting transactions.
      *
      * @throws Exception
