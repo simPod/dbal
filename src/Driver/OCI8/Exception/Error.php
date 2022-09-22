@@ -34,10 +34,12 @@ final class Error extends AbstractException
             //ORA-00001: unique constraint (DOCTRINE.GH3423_UNIQUE) violated
             [$firstMessage, $secondMessage] = explode("\n", $message, 2);
 
-            [$code, $message] = explode(': ', $secondMessage, 2);
-            $code             = (int) str_replace('ORA-', '', $code);
+            [$causeCode, $causeMessage] = explode(': ', $secondMessage, 2);
+            $causeCode                  = (int) str_replace('ORA-', '', $causeCode);
+
+            $cause = new self($causeMessage, null, $causeCode);
         }
 
-        return new self($message, null, $code);
+        return new self($message, null, $code, $cause ?? null);
     }
 }
