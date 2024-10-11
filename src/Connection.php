@@ -1273,15 +1273,20 @@ class Connection
     public function transactional(Closure $func)
     {
         $this->beginTransaction();
+
+        $successful = false;
+
         try {
             $res = $func($this);
             $this->commit();
 
-            return $res;
-        } catch (Throwable $e) {
-            $this->rollBack();
+            $successful = true;
 
-            throw $e;
+            return $res;
+        } finally {
+            if (! $successful) {
+                $this->rollBack();
+            }
         }
     }
 
@@ -1418,32 +1423,15 @@ class Connection
 
         $connection = $this->getWrappedConnection();
 
-        if ($this->transactionNestingLevel === 1) {
-            $result = $this->doCommit($connection);
-        } elseif ($this->nestTransactionsWithSavepoints) {
-            $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+        try {
+            if ($this->transactionNestingLevel === 1) {
+                $result = $this->doCommit($connection);
+            } elseif ($this->nestTransactionsWithSavepoints) {
+                $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+            }
+        } finally {
+            $this->updateTransactionStateAfterCommit();
         }
-
-        --$this->transactionNestingLevel;
-
-        $eventManager = $this->getEventManager();
-
-        if ($eventManager->hasListeners(Events::onTransactionCommit)) {
-            Deprecation::trigger(
-                'doctrine/dbal',
-                'https://github.com/doctrine/dbal/issues/5784',
-                'Subscribing to %s events is deprecated.',
-                Events::onTransactionCommit,
-            );
-
-            $eventManager->dispatchEvent(Events::onTransactionCommit, new TransactionCommitEventArgs($this));
-        }
-
-        if ($this->autoCommit !== false || $this->transactionNestingLevel !== 0) {
-            return $result;
-        }
-
-        $this->beginTransaction();
 
         return $result;
     }
@@ -1461,13 +1449,41 @@ class Connection
             $logger->startQuery('"COMMIT"');
         }
 
-        $result = $connection->commit();
+        try {
+            $result = $connection->commit();
+        } catch (Driver\Exception $e) {
+            throw $this->convertExceptionDuringQuery($e, 'COMMIT');
+        }
 
         if ($logger !== null) {
             $logger->stopQuery();
         }
 
         return $result;
+    }
+
+    private function updateTransactionStateAfterCommit(): void
+    {
+        --$this->transactionNestingLevel;
+
+        $eventManager = $this->getEventManager();
+
+        if ($eventManager->hasListeners(Events::onTransactionCommit)) {
+            Deprecation::trigger(
+                'doctrine/dbal',
+                'https://github.com/doctrine/dbal/issues/5784',
+                'Subscribing to %s events is deprecated.',
+                Events::onTransactionCommit,
+            );
+
+            $eventManager->dispatchEvent(Events::onTransactionCommit, new TransactionCommitEventArgs($this));
+        }
+
+        if ($this->autoCommit !== false || $this->transactionNestingLevel !== 0) {
+            return;
+        }
+
+        $this->beginTransaction();
     }
 
     /**
