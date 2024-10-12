@@ -9,6 +9,7 @@ use Doctrine\DBAL\Cache\CacheException;
 use Doctrine\DBAL\Cache\QueryCacheProfile;
 use Doctrine\DBAL\Driver\API\ExceptionConverter;
 use Doctrine\DBAL\Driver\Connection as DriverConnection;
+use Doctrine\DBAL\Driver\Exception as TheDriverException;
 use Doctrine\DBAL\Driver\ServerInfoAwareConnection;
 use Doctrine\DBAL\Driver\Statement as DriverStatement;
 use Doctrine\DBAL\Event\TransactionBeginEventArgs;
@@ -1283,16 +1284,30 @@ class Connection
 
         try {
             $res = $func($this);
-            $this->commit();
 
             $successful = true;
-
-            return $res;
         } finally {
             if (! $successful) {
                 $this->rollBack();
             }
         }
+
+        $shouldRollback = true;
+        try {
+            $this->commit();
+
+            $shouldRollback = false;
+        } catch (TheDriverException $t) {
+            $shouldRollback = false;
+
+            throw $t;
+        } finally {
+            if ($shouldRollback) {
+                $this->rollBack();
+            }
+        }
+
+        return $res;
     }
 
     /**
@@ -1424,12 +1439,21 @@ class Connection
 
         $connection = $this->getWrappedConnection();
 
-        if ($this->transactionNestingLevel === 1) {
-            $result = $this->doCommit($connection);
-        } elseif ($this->nestTransactionsWithSavepoints) {
-            $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+        try {
+            if ($this->transactionNestingLevel === 1) {
+                $result = $this->doCommit($connection);
+            } elseif ($this->nestTransactionsWithSavepoints) {
+                $this->releaseSavepoint($this->_getNestedTransactionSavePointName());
+            }
+        } finally {
+            $this->updateTransactionStateAfterCommit();
         }
 
+        return $result;
+    }
+
+    private function updateTransactionStateAfterCommit(): void
+    {
         --$this->transactionNestingLevel;
 
         $eventManager = $this->getEventManager();
@@ -1446,12 +1470,10 @@ class Connection
         }
 
         if ($this->autoCommit !== false || $this->transactionNestingLevel !== 0) {
-            return $result;
+            return;
         }
 
         $this->beginTransaction();
-
-        return $result;
     }
 
     /**
