@@ -10,9 +10,12 @@ use Doctrine\DBAL\Driver\PDO\PDOException;
 use Doctrine\DBAL\Driver\PDO\PgSQL\Driver as PDOPgSQLDriver;
 use Doctrine\DBAL\Driver\PgSQL\Driver as PgSQLDriver;
 use Doctrine\DBAL\Driver\PgSQL\Exception as PgSQLException;
+use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
+use Doctrine\DBAL\Platforms\DB2Platform;
 use Doctrine\DBAL\Platforms\OraclePlatform;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLServerPlatform;
 use Doctrine\DBAL\Schema\ForeignKeyConstraint;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Tests\FunctionalTestCase;
@@ -226,18 +229,20 @@ final class ForeignKeyConstraintViolationsTest extends FunctionalTestCase
 
     private function expectConstraintViolation(bool $deferred): void
     {
-//        if ($this->connection->getDatabasePlatform() instanceof SQLServerPlatform) {
-//            $this->expectExceptionMessage(sprintf("Violation of UNIQUE KEY constraint '%s'", $this->constraintName));
-//
-//            return;
-//        }
-//
-//        if ($this->connection->getDatabasePlatform() instanceof DB2Platform) {
-//            // No concrete message is provided
-//            $this->expectException(DriverException::class);
-//
-//            return;
-//        }
+        if ($this->connection->getDatabasePlatform() instanceof SQLServerPlatform) {
+            $this->expectExceptionMessage(
+                sprintf('conflicted with the FOREIGN KEY constraint "%s"', $this->constraintName),
+            );
+
+            return;
+        }
+
+        if ($this->connection->getDatabasePlatform() instanceof DB2Platform) {
+            // No concrete message is provided
+            $this->expectException(DriverException::class);
+
+            return;
+        }
 
         if ($deferred) {
             if ($this->connection->getDatabasePlatform() instanceof OraclePlatform) {
